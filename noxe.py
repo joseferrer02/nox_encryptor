@@ -94,7 +94,7 @@ def crypt_decrypt_file(file, key, action):
     elif action == 'decrypt':
         try:
             data = decrypt_data(data, key)
-        except (ValueError):
+        except:
             return False
 
     with open(new_file.absolute(), 'wb') as f:
@@ -240,21 +240,20 @@ if __name__ == '__main__':
             err = 0
         
             for file in files:
-                try:
-                    crypt_decrypt_file(file=file, key=args.key, action='decrypt')
+                code = crypt_decrypt_file(file=file, key=args.key, action='decrypt')
+                if code:
                     print(f'{Fore.GREEN}[OK]{Style.RESET_ALL}: {file.name} -> Desencriptado')
-                except:
+                    if args.remove:
+                        try:
+                            file.unlink()
+                        except:
+                            pass                    
+                else:
                     print(f'{Fore.RED}[ERROR]{Style.RESET_ALL}: {file.name} -> No se pudo desencriptar')
                     err += 1
-
-                if args.remove:
-                    try:
-                        file.unlink()
-                    except:
-                        pass
             
             print()
             if not err:
                 print(f'{Fore.LIGHTGREEN_EX}[END]{Style.RESET_ALL}: Total descifrados {len(files)}')
             else:
-                print(f'{Fore.MAGENTA}[END]{Style.RESET_ALL}: Descifrados: {len(files-err)} / Errores: {err}')
+                print(f'{Fore.LIGHTRED_EX}[END]{Style.RESET_ALL}: Descifrados: {len(files)-err} / Errores: {err}')
