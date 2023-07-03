@@ -13,6 +13,7 @@ import colorama
 from colorama import Fore, Style
 
 
+
 def adjust_key(key):
     salt = b'salt_unico'  # Sal única para cada clave
     iterations = 1000  # Número de iteraciones para el algoritmo PBKDF2
