@@ -15,7 +15,7 @@ from colorama import Fore, Style
 
 def adjust_key(key):
     salt = b'salt_unico'  # Sal única para cada clave
-    iterations = 1000  # Número de iteraciones para el algoritmo PBKDF2
+    iterations = 5000  # Número de iteraciones para el algoritmo PBKDF2
 
     # Derivar la clave utilizando PBKDF2 con SHA-256
     kdf = PBKDF2HMAC(
@@ -77,6 +77,7 @@ def decrypt_data(encrypted_data, key):
 
     return plaintext
 
+
 def crypt_decrypt_file(file, key, action):
     
     if action == 'encrypt':
@@ -90,18 +91,38 @@ def crypt_decrypt_file(file, key, action):
     if action == 'encrypt':
         try:
             data = encrypt_data(data, key)
-        except:
-            return False
+        
+        except (KeyboardInterrupt):
+            print(f'\n{Fore.LIGHTRED_EX}[END]{Style.RESET_ALL}: Operación cancelada por el usuario.')
+            sys.exit(0)
+        
+        except (Exception) as err:
+            return err
+    
     elif action == 'decrypt':
         try:
             data = decrypt_data(data, key)
-        except:
-            return False
-
-    with open(new_file.absolute(), 'wb') as f:
-        f.write(data)
+        
+        except (KeyboardInterrupt):
+            print(f'\n{Fore.LIGHTRED_EX}[END]{Style.RESET_ALL}: Operación cancelada por el usuario.')
+            sys.exit(0)
+            
+        except (Exception) as err:
+            return err
     
-    return True
+    try:
+        with open(new_file.absolute(), 'wb') as f:
+            f.write(data)
+    
+    except (KeyboardInterrupt):
+        print(f'\n{Fore.LIGHTRED_EX}[END]{Style.RESET_ALL}: Operación cancelada por el usuario.')
+        if new_file.exists():
+            new_file.unlink()
+        sys.exit(0)
+    
+    except (Exception) as err:
+        return err
+    
 
 def get_passwd():
     prompt="Introduce la clave secreta: "
@@ -134,7 +155,7 @@ def get_passwd():
     
     print()
     if interrupted:
-        print(f'{Fore.RED}[END]{Style.RESET_ALL}: Operación cancelada por el usuario.')
+        print(f'\n{Fore.LIGHTRED_EX}[END]{Style.RESET_ALL}: Operación cancelada por el usuario.')
         sys.exit(0)
     
     return passwd
@@ -149,6 +170,7 @@ if __name__ == '__main__':
     parser.add_argument('path', help='Path to file or folder')
     parser.add_argument('-r', '--recursive', action='store_true', help='Encrypts/decrypts recursively in a path')
     parser.add_argument('-x', '--remove', action='store_true', help='Remove file after encrypt/decrypt')
+    parser.add_argument('-v', '--verbose', action='store_true', help='Active error descriptions')
     
     # Crear un grupo de argumentos mutuamente excluyentes
     action = parser.add_mutually_exclusive_group(required=True)
@@ -161,8 +183,13 @@ if __name__ == '__main__':
 
     if not args.key:
         print(f"{Fore.LIGHTYELLOW_EX}[ATENTION]{Style.RESET_ALL} Si pierde la clave de cifrado no podrá recurar su archivo.")
-        args.key = get_passwd()
-
+        while True:
+            args.key = get_passwd()
+            if len(args.key) < 8:
+                print(f"{Fore.RED}[ERROR]{Style.RESET_ALL} La clave debe tener mínimo 8 dígitos.")
+            else:
+                break
+    
     ruta = pathlib.Path(args.path)
     
     if not ruta.exists():
@@ -175,10 +202,21 @@ if __name__ == '__main__':
                 print(f'{Fore.LIGHTYELLOW_EX}[WARNING]{Style.RESET_ALL}: {ruta.name} -> El fichero ya está encriptado.')
                 sys.exit(0)
 
-            crypt_decrypt_file(file=ruta, key=args.key, action='encrypt')
-            if args.remove:
-                ruta.unlink()
-            print(f'{Fore.GREEN}[OK]{Style.RESET_ALL}: {ruta.name} -> Encriptado')
+            code = crypt_decrypt_file(file=ruta, key=args.key, action='encrypt')
+            if not code:
+                print(f'{Fore.GREEN}[OK]{Style.RESET_ALL}: {ruta.name}')
+                # intenta eliminar el archivo antiguo
+                if args.remove:
+                    try:
+                        ruta.unlink()
+                    except:
+                        pass
+            
+            else:
+                print(f'{Fore.RED}[ERROR]{Style.RESET_ALL}: {ruta.name}')
+                if args.verbose:
+                    print(code)
+            
         
         elif ruta.is_dir():
             if args.recursive:
@@ -193,19 +231,20 @@ if __name__ == '__main__':
             
             for file in files:
                 # intenta cifrar el archivo
-                try:
-                    crypt_decrypt_file(file=file, key=args.key, action='encrypt')
-                    print(f'{Fore.GREEN}[OK]{Style.RESET_ALL}: {file.name} -> Encriptado')
-                except:
-                    print(f'{Fore.RED}[ERROR]{Style.RESET_ALL}: {file.name} -> No se pudo encriptar')
+                code = crypt_decrypt_file(file=file, key=args.key, action='encrypt')
+                if not code:
+                    print(f'{Fore.GREEN}[OK]{Style.RESET_ALL}: {file.name}')
+                    # intenta eliminar el archivo antiguo
+                    if args.remove:
+                        try:
+                            file.unlink()
+                        except:
+                            pass                    
+                else:
+                    print(f'{Fore.RED}[ERROR]{Style.RESET_ALL}: {file.name}')
+                    if args.verbose:
+                        print(code)                    
                     err += 1
-                
-                # intenta eliminar el archivo antiguo
-                if args.remove:
-                    try:
-                        file.unlink()
-                    except:
-                        pass
             
             print()
             if not err:
@@ -222,12 +261,14 @@ if __name__ == '__main__':
 
             code = crypt_decrypt_file(file=ruta, key=args.key, action='decrypt')
             
-            if code:
-                print(f'{Fore.GREEN}[OK]{Style.RESET_ALL}: {ruta.name} -> Desencriptado')
+            if not code:
+                print(f'{Fore.GREEN}[OK]{Style.RESET_ALL}: {ruta.name}')
                 if args.remove:
                     ruta.unlink()                
             else:
-                print(f'{Fore.RED}[ERROR]{Style.RESET_ALL}: {ruta.name} -> Clave incorrecta')
+                print(f'{Fore.RED}[ERROR]{Style.RESET_ALL}: {ruta.name}')
+                if args.verbose:
+                    print(code)                
         
         elif ruta.is_dir():
             if args.recursive:
@@ -242,15 +283,17 @@ if __name__ == '__main__':
         
             for file in files:
                 code = crypt_decrypt_file(file=file, key=args.key, action='decrypt')
-                if code:
-                    print(f'{Fore.GREEN}[OK]{Style.RESET_ALL}: {file.name} -> Desencriptado')
+                if not code:
+                    print(f'{Fore.GREEN}[OK]{Style.RESET_ALL}: {file.name}')
                     if args.remove:
                         try:
                             file.unlink()
                         except:
                             pass                    
                 else:
-                    print(f'{Fore.RED}[ERROR]{Style.RESET_ALL}: {file.name} -> No se pudo desencriptar')
+                    print(f'{Fore.RED}[ERROR]{Style.RESET_ALL}: {file.name}')
+                    if args.verbose:
+                        print(code)                    
                     err += 1
             
             print()

@@ -161,6 +161,4 @@ cython_debug/
 
 test/
 env311/
-icon.ico
-noxe.spec
 NoxEncryptor.wpr
